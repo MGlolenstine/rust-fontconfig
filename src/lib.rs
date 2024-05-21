@@ -16,8 +16,6 @@
 //! ```
 
 #![allow(non_snake_case)]
-#![cfg_attr(not(feature = "std"), no_std)]
-
 extern crate allsorts;
 extern crate mmapio;
 extern crate xmlparser;
@@ -25,9 +23,9 @@ extern crate xmlparser;
 extern crate alloc;
 extern crate core;
 
+use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
-#[cfg(feature = "std")]
 use std::path::PathBuf;
 
 #[derive(Debug, Default, Clone, PartialOrd, Ord, PartialEq, Eq)]
