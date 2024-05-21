@@ -6,16 +6,13 @@
 //! ```rust
 //! use rust_fontconfig::{FcFontCache, FcPattern};
 //!
-//! fn main() {
+//! let cache = FcFontCache::build();
+//! let results = cache.query(&FcPattern {
+//!     name: Some(String::from("Arial")),
+//!     .. Default::default()
+//! });
 //!
-//!     let cache = FcFontCache::build();
-//!     let results = cache.query(&FcPattern {
-//!         name: Some(String::from("Arial")),
-//!         .. Default::default()
-//!     });
-//!
-//!     println!("font results: {:?}", results);
-//! }
+//! println!("font results: {:?}", results);
 //! ```
 
 #![allow(non_snake_case)]
@@ -33,23 +30,18 @@ use alloc::string::String;
 #[cfg(feature = "std")]
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(C)]
 pub enum PatternMatch {
     True,
     False,
+    #[default]
     DontCare,
 }
 
 impl PatternMatch {
     fn needs_to_match(&self) -> bool {
         matches!(self, PatternMatch::True | PatternMatch::False)
-    }
-}
-
-impl Default for PatternMatch {
-    fn default() -> Self {
-        PatternMatch::DontCare
     }
 }
 
@@ -109,12 +101,13 @@ impl FcFontCache {
             // `~` isn't actually valid on Windows, but it will be converted by `process_path`
             let font_dirs = vec![
                 (None, "C:\\Windows\\Fonts\\".to_owned()),
-                (None, "~\\AppData\\Local\\Microsoft\\Windows\\Fonts\\".to_owned()),
+                (
+                    None,
+                    "~\\AppData\\Local\\Microsoft\\Windows\\Fonts\\".to_owned(),
+                ),
             ];
             FcFontCache {
-                map: FcScanDirectoriesInner(&font_dirs)
-                    .into_iter()
-                    .collect(),
+                map: FcScanDirectoriesInner(&font_dirs).into_iter().collect(),
             }
         }
 
@@ -126,9 +119,7 @@ impl FcFontCache {
                 (None, "/Library/Fonts".to_owned()),
             ];
             FcFontCache {
-                map: FcScanDirectoriesInner(&font_dirs)
-                    .into_iter()
-                    .collect(),
+                map: FcScanDirectoriesInner(&font_dirs).into_iter().collect(),
             }
         }
     }
@@ -137,9 +128,8 @@ impl FcFontCache {
     pub fn list(&self) -> &BTreeMap<FcPattern, FcFontPath> {
         &self.map
     }
-    
-    fn query_matches_internal(k: &FcPattern, pattern: &FcPattern) -> bool {
 
+    fn query_matches_internal(k: &FcPattern, pattern: &FcPattern) -> bool {
         let name_needs_to_match = pattern.name.is_some();
         let family_needs_to_match = pattern.family.is_some();
 
@@ -154,11 +144,11 @@ impl FcFontCache {
         let oblique_matches = k.oblique == pattern.oblique;
         let bold_matches = k.bold == pattern.bold;
         let monospace_matches = k.monospace == pattern.monospace;
-        
+
         if name_needs_to_match && !name_matches {
             return false;
         }
-        
+
         if family_needs_to_match && !family_matches {
             return false;
         }
@@ -192,8 +182,7 @@ impl FcFontCache {
 
     /// Queries a font from the in-memory `font -> file` mapping, returns all matching fonts
     pub fn query_all(&self, pattern: &FcPattern) -> Vec<&FcFontPath> {
-        self
-            .map
+        self.map
             .iter() // TODO: par_iter!
             .filter(|(k, _)| Self::query_matches_internal(k, pattern))
             .map(|(_, v)| v)
@@ -202,8 +191,7 @@ impl FcFontCache {
 
     /// Queries a font from the in-memory `font -> file` mapping, returns the first found font (early return)
     pub fn query(&self, pattern: &FcPattern) -> Option<&FcFontPath> {
-        self
-            .map
+        self.map
             .iter() // TODO: par_iter!
             .find(|(k, _)| Self::query_matches_internal(k, pattern))
             .map(|(_, v)| v)
@@ -236,33 +224,33 @@ fn process_path(
 
     // These three could, in theory, be cached, but the work required to do so outweighs the minor benefits
     fn get_home_value() -> Option<PathBuf> {
-        var(HOME_ENV_VAR)
-            .ok()
-            .map(PathBuf::from)
+        var(HOME_ENV_VAR).ok().map(PathBuf::from)
     }
     fn get_xdg_config_home_value() -> Option<PathBuf> {
         var(XDG_CONFIG_HOME_ENV_VAR)
             .ok()
             .map(PathBuf::from)
-            .or_else(|| get_home_value()
-                .map(|home_path|
-                    home_path.join(XDG_CONFIG_HOME_DEFAULT_PATH_SUFFIX))
-            )
+            .or_else(|| {
+                get_home_value()
+                    .map(|home_path| home_path.join(XDG_CONFIG_HOME_DEFAULT_PATH_SUFFIX))
+            })
     }
     fn get_xdg_data_home_value() -> Option<PathBuf> {
         var(XDG_DATA_HOME_ENV_VAR)
             .ok()
             .map(PathBuf::from)
-            .or_else(|| get_home_value()
-                .map(|home_path|
-                    home_path.join(XDG_DATA_HOME_DEFAULT_PATH_SUFFIX))
-            )
+            .or_else(|| {
+                get_home_value().map(|home_path| home_path.join(XDG_DATA_HOME_DEFAULT_PATH_SUFFIX))
+            })
     }
 
     // Resolve the tilde character in the path, if present
     if path.starts_with(HOME_SHORTCUT) {
         if let Some(home_path) = get_home_value() {
-            path = home_path.join(path.strip_prefix(HOME_SHORTCUT).expect("already checked that it starts with the prefix"));
+            path = home_path.join(
+                path.strip_prefix(HOME_SHORTCUT)
+                    .expect("already checked that it starts with the prefix"),
+            );
         } else {
             return None;
         }
@@ -286,8 +274,8 @@ fn process_path(
                         .map(|xdg_data_home_path| xdg_data_home_path.join(path))
                 }
             }
-            _ => None // Unsupported prefix
-        }
+            _ => None, // Unsupported prefix
+        },
         None => Some(path),
     }
 }
@@ -309,25 +297,25 @@ fn FcScanDirectories() -> Option<Vec<(FcPattern, FcFontPath)>> {
     while let Some((prefix, mut path_to_visit)) = paths_to_visit.pop() {
         path_to_visit = match process_path(&prefix, path_to_visit, true) {
             Some(path) => path,
-            None => continue
+            None => continue,
         };
 
         let metadata = match fs::metadata(path_to_visit.as_path()) {
             Ok(metadata) => metadata,
-            Err(_) => continue
+            Err(_) => continue,
         };
 
         if metadata.is_file() {
             let xml_utf8 = match fs::read_to_string(path_to_visit.as_path()) {
                 Ok(xml_utf8) => xml_utf8,
-                Err(_) => continue
+                Err(_) => continue,
             };
 
             ParseFontsConf(xml_utf8.as_str(), &mut paths_to_visit, &mut font_paths);
         } else if metadata.is_dir() {
             let dir_entries = match fs::read_dir(path_to_visit) {
                 Ok(dir_entries) => dir_entries,
-                Err(_) => continue
+                Err(_) => continue,
             };
 
             for dir_entry in dir_entries {
@@ -337,13 +325,15 @@ fn FcScanDirectories() -> Option<Vec<(FcPattern, FcFontPath)>> {
                     // `fs::metadata` traverses symbolic links
                     let metadata = match fs::metadata(entry_path.as_path()) {
                         Ok(metadata) => metadata,
-                        Err(_) => continue
+                        Err(_) => continue,
                     };
 
                     if metadata.is_file() {
                         if let Some(file_name) = entry_path.file_name() {
                             let file_name_str = file_name.to_string_lossy();
-                            if file_name_str.starts_with(|c: char| c.is_ascii_digit()) && file_name_str.ends_with(".conf") {
+                            if file_name_str.starts_with(|c: char| c.is_ascii_digit())
+                                && file_name_str.ends_with(".conf")
+                            {
                                 paths_to_visit.push((None, entry_path));
                             }
                         }
@@ -397,7 +387,7 @@ fn ParseFontsConf(
                     TAG_DIR => {
                         is_in_dir = true;
                     }
-                    _ => continue
+                    _ => continue,
                 }
 
                 current_path = None;
@@ -433,7 +423,10 @@ fn ParseFontsConf(
                         }
 
                         if let Some(current_path) = current_path.as_ref() {
-                            paths_to_visit.push((current_prefix.map(ToOwned::to_owned), PathBuf::from(current_path)));
+                            paths_to_visit.push((
+                                current_prefix.map(ToOwned::to_owned),
+                                PathBuf::from(current_path),
+                            ));
                         }
                     }
                     TAG_DIR => {
@@ -442,10 +435,13 @@ fn ParseFontsConf(
                         }
 
                         if let Some(current_path) = current_path.as_ref() {
-                            font_paths.push((current_prefix.map(ToOwned::to_owned), (*current_path).to_owned()));
+                            font_paths.push((
+                                current_prefix.map(ToOwned::to_owned),
+                                (*current_path).to_owned(),
+                            ));
                         }
                     }
-                    _ => continue
+                    _ => continue,
                 }
 
                 is_in_include = false;
@@ -468,11 +464,7 @@ fn FcScanDirectoriesInner(paths: &[(Option<String>, String)]) -> Vec<(FcPattern,
     paths
         .par_iter()
         .filter_map(|(prefix, p)| {
-            if let Some(path) = process_path(prefix, PathBuf::from(p), false) {
-                Some(FcScanSingleDirectoryRecursive(path))
-            } else {
-                None
-            }
+            process_path(prefix, PathBuf::from(p), false).map(FcScanSingleDirectoryRecursive)
         })
         .flatten()
         .collect()
@@ -522,7 +514,7 @@ fn FcParseFontFiles(files_to_parse: &[PathBuf]) -> Vec<(FcPattern, FcFontPath)> 
 
     let result = files_to_parse
         .par_iter()
-        .filter_map(|file| FcParseFont(file))
+        .filter_map(FcParseFont)
         .collect::<Vec<Vec<_>>>();
 
     result.into_iter().flat_map(|f| f.into_iter()).collect()
